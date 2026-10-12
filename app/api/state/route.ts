@@ -1,0 +1,36 @@
+import { env } from 'cloudflare:workers';
+import { getChatGPTUser } from '../../chatgpt-auth';
+import { makeDemo } from '../../data';
+import { z } from 'zod';
+const item=z.object({id:z.string().min(1).max(100)}).passthrough();
+const project=item.extend({name:z.string().trim().min(1).max(300),code:z.string().min(1),team:z.string(),status:z.enum(['예정','진행','종료']),focus:z.boolean(),records:z.array(item).max(1000),events:z.array(item).max(1000),budgets:z.array(item).max(500),plans:z.array(item).max(1000),changes:z.array(item).max(1000),people:z.array(item).max(500),documents:z.array(item).max(1000)});
+const schema=z.object({revision:z.number().int().nonnegative(),data:z.object({demo:z.boolean(),projects:z.array(project).max(100)})});
+export async function GET() {
+ const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});
+ const row=await env.DB!.prepare('SELECT data, revision FROM workspaces WHERE owner = ?').bind(user.userId).first<{data:string;revision:number}>();
+ return Response.json(row?{data:JSON.parse(row.data),revision:row.revision}:{data:makeDemo(),revision:0},{headers:{'Cache-Control':'no-store'}});
+}
+export async function PUT(req: Request) {
+ const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});
+ if(req.headers.get('origin')&&new URL(req.headers.get('origin')!).host!==new URL(req.url).host)return Response.json({error:'잘못된 요청 출처입니다.'},{status:403});
+ const raw=await req.text();if(raw.length>3000000)return Response.json({error:'저장 용량을 초과했습니다.'},{status:413});
+ let parsed;try{parsed=schema.safeParse(JSON.parse(raw));}catch{return Response.json({error:'올바른 JSON이 아닙니다.'},{status:400});}
+ if(!parsed.success)return Response.json({error:'입력 항목을 확인해 주세요.'},{status:400});
+ const {data,revision}=parsed.data;
+ if(new Set(data.projects.map(p=>p.code)).size!==data.projects.length)return Response.json({error:'과제 번호가 중복됩니다.'},{status:400});
+ for(const p of data.projects){
+  if(p.start && p.end && String(p.start)>String(p.end))return Response.json({error:'과제 종료일을 확인해 주세요.'},{status:400});
+  for(const b of p.budgets)if(!Number.isFinite(Number(b.initial))||!Number.isFinite(Number(b.spent))||Number(b.initial)<0||Number(b.spent)<0)return Response.json({error:'예산과 집행액은 0 이상의 숫자여야 합니다.'},{status:400});
+  for(const c of [...p.plans,...p.changes]){
+   if(!Number.isFinite(Number(c.amount))||(p.plans.includes(c)&&Number(c.amount)<0))return Response.json({error:'금액을 확인해 주세요.'},{status:400});
+   const target=p.budgets.find(b=>b.id===c.categoryId&&b.year===c.year);if(!target)return Response.json({error:'동일 연도의 예산 비목을 선택해 주세요.'},{status:400});
+   if(c.applied&&c.status!=='승인')return Response.json({error:'승인된 변경만 예산에 반영할 수 있습니다.'},{status:400});
+   if(c.type==='비목 간 이동'){const from=p.budgets.find(b=>b.id===c.fromId&&b.year===c.year);if(!from||from.id===target.id||from.kind!==target.kind||Number(c.amount)<=0)return Response.json({error:'비목 이동은 동일 현금·현물 구분의 서로 다른 비목을 선택하고 양수를 입력하세요.'},{status:400});}
+  }
+  for(const d of p.documents)if(d.url&&!/^https?:\/\//.test(String(d.url)))return Response.json({error:'문서 링크는 http 또는 https 주소여야 합니다.'},{status:400});
+ }
+ const value=JSON.stringify(data), now=new Date().toISOString();
+ const result=revision===0?await env.DB!.prepare('INSERT INTO workspaces (owner,data,revision,updated_at) VALUES (?,?,1,?) ON CONFLICT(owner) DO NOTHING').bind(user.userId,value,now).run():await env.DB!.prepare('UPDATE workspaces SET data=?,revision=revision+1,updated_at=? WHERE owner=? AND revision=?').bind(value,now,user.userId,revision).run();
+ if(!result.meta.changes)return Response.json({error:'다른 창에서 변경된 내용이 있습니다. 새로고침 후 다시 입력해 주세요.'},{status:409});
+ return Response.json({revision:revision+1});
+}
