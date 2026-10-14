@@ -8,7 +8,15 @@ const schema=z.object({revision:z.number().int().nonnegative(),data:z.object({de
 export async function GET() {
  const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});
  const row=await env.DB!.prepare('SELECT data, revision FROM workspaces WHERE owner = ?').bind(user.userId).first<{data:string;revision:number}>();
- return Response.json(row?{data:JSON.parse(row.data),revision:row.revision}:{data:makeDemo(),revision:0},{headers:{'Cache-Control':'no-store'}});
+ if (!row) return Response.json({data:makeDemo(),revision:0},{headers:{'Cache-Control':'no-store'}});
+ const stored=JSON.parse(row.data);
+ // Earlier preview data was explicitly marked demo. Replace only those fictional rows;
+ // preserve any real projects the owner already entered.
+ const existing=stored.demo===true?stored.projects.filter((p:{id:string})=>!p.id.startsWith('sample-')):stored.projects;
+ const names=new Set(existing.map((p:{name:string})=>p.name));
+ stored.projects=[...existing,...makeDemo().projects.filter(p=>!names.has(p.name))];
+ stored.demo=false;
+ return Response.json({data:stored,revision:row.revision},{headers:{'Cache-Control':'no-store'}});
 }
 export async function PUT(req: Request) {
  const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});

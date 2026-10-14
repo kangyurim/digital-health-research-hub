@@ -1,7 +1,12 @@
 export type Item = { id: string; [key: string]: any };
 export type Project = Item & { name: string; code: string; team: string; status: string; focus: boolean; agency: string; lead: string; start: string; end: string; updated: string; description: string; records: Item[]; events: Item[]; budgets: Item[]; plans: Item[]; changes: Item[]; people: Item[]; documents: Item[] };
 export type Workspace = { projects: Project[]; demo: boolean };
-export const teams = ['AI전략운영팀', '의료데이터관리팀', '디지털헬스팀'];
+export const teams = ['AI전략운영팀', '의료데이터관리팀', '디지털헬스팀', '미지정'];
+export const organization = [
+ {name:'디지털헬스팀',leader:'엄재준',members:['이상휘 과장','최운성 주임','남윤진 사무원']},
+ {name:'의료데이터관리팀',leader:'김경안',members:['곽인혜 대리','박다슬 주임','안태진 사무원']},
+ {name:'AI전략운영팀',leader:'정무열',members:['김지원 사무원','강유림 사무원']},
+];
 export const today = () => new Date().toLocaleDateString('sv-SE', {timeZone:'Asia/Seoul'});
 export const uid = () => crypto.randomUUID();
 export function budget(p: Project, year = '2026', kind = '전체') {
@@ -20,15 +25,26 @@ export function categoryBudget(p: Project, b: Item) {
  return {delta,total:Number(b.initial)+delta,spent:Number(b.spent),planned};
 }
 export function makeDemo(): Workspace {
- const names=['의료 특화 초거대 AI 서비스 개발','차세대 의료데이터 통합 플랫폼 구축','디지털 치료기기 임상 실증 연구','멀티모달 의료 AI 진단 기술 개발','보건의료 데이터 활용 생태계 조성','지역사회 디지털 헬스케어 실증','병원 업무 혁신 AI 에이전트 개발','정밀의료 데이터 표준화 연구','스마트병원 선도모델 확산','의료 AI 신뢰성 평가체계 구축','차세대 건강관리 서비스 기획','의료데이터 품질관리 기반 구축'];
- const amounts=[820,640,480,560,390,320,450,280,360,240,180,210];
- const leads=['김민준','이서연','박지훈','정수빈','최현우','김지영'];
- return { demo:true, projects:names.map((name,i)=>{
- const id=`sample-${i+1}`, team=teams[i%3], lead=leads[i%6];
- const status=i<9?'진행':i<11?'예정':'종료';
- const budgets=['인건비','연구활동비','연구시설·장비비','간접비'].map((n,j)=>({id:`${id}-b${j}`,name:n,year:'2026',kind:j===3?'현물':'현금',source:'정부지원금',provider:'지원기관',initial:amounts[i]*1000000*[.5,.25,.15,.1][j],spent:status==='예정'?0:Math.round(amounts[i]*1000000*[.5,.25,.15,.1][j]*(status==='종료'?1:[.63,.48,.72,.55][j])),date:'2026-10-08'}));
- return {id,name,code:`RS-2026-${String(10001+i)}`,team,lead,status,focus:i<8,agency:['한국보건산업진흥원','한국지능정보사회진흥원','한국연구재단'][i%3],start:'2025-04-01',end:i===11?'2026-09-30':'2027-12-31',updated:'2026-10-08',author:lead,description:`${name}을 통해 의료 현장의 디지털 전환 기반을 마련하고, 실증 중심의 기술 개발 및 현장 적용을 추진합니다.`,program:'보건의료 기술 연구개발사업',alias:['Med-AI','Data Link','D-Therapy'][i%3],annual:'예',round:'2',yearStart:'2026-01-01',yearEnd:'2026-12-31',host:'주관 연구기관',partners:'참여 연구기관 A, 참여 연구기관 B',participation:'참여',contacts:'협력기관 담당자 확인 예정',note:'기획 검토를 위한 가상의 예시 과제입니다.',
- records:status==='예정'?[]:[{id:`${id}-r1`,date:'2026-10-08',title:'10월 1차 워킹그룹 수행 보고',author:lead,progress:'핵심 기능 개발 및 데이터 검증 1차 작업 완료. 참여기관 실무 협의를 통해 다음 단계의 수행 범위를 확정했습니다.',plan:'2차 검증 및 실증 대상 기관 협의 진행\n중간 점검 보고자료 작성',discussion:i%3===0?'실증 데이터 활용 범위에 대한 의사결정이 필요합니다.':'다음 회차 실증 일정 및 참여기관별 역할 확인',issue:i%3===0?'참여기관 데이터 제공 일정 조율 필요':'',followup:'담당 기관과 세부 일정을 협의하고 다음 워킹그룹에서 공유 예정',reference:'',updated:'2026-10-08'}, {id:`${id}-r0`,date:'2026-09-24',title:'9월 2차 워킹그룹 수행 보고',author:lead,progress:'개발 요구사항 정리 및 기관별 역할 분담 완료',plan:'1차 검증 수행',discussion:'검증 환경 준비',issue:'',followup:'검증용 데이터 준비 완료',updated:'2026-09-24'}],
- events:i<6?[{id:`${id}-e1`,title:['10월 정기 워킹그룹','데이터 표준화 실무 협의','임상 실증 중간 점검','AI 모델 성능 평가','데이터 활용 보고서 제출','참여기관 정기 회의'][i],type:['회의','회의','평가','평가','보고','회의'][i],start:`2026-10-${[14,15,16,20,22,23][i]}T${i%2?'14:00':'10:00'}`,end:`2026-10-${[14,15,16,20,22,23][i]}T${i%2?'15:00':'11:00'}`,owner:lead,place:'본관 3층 회의실',detail:'과제별 수행 현황 및 향후 계획 공유',done:false}]:[],budgets,plans:status==='진행'?[{id:`${id}-pl`,title:'2차 실증 연구활동비',categoryId:budgets[1].id,year:'2026',amount:20000000,date:'2026-11-01',status:'예정',note:''}]:[],changes:[],people:[{id:`${id}-person`,name:lead,organization:'우리 기관',team,position:'책임연구원',role:'연구책임자',task:'과제 총괄 및 수행 관리',start:'2025-04-01',end:'2027-12-31',active:true,email:'',phone:'',history:'2025-04-01 신규 참여 (예시)'}],documents:[]};
- })};
+ const rows:[string,string,string,string,string,string][]=[
+ ['본인진료기록열람지원 시스템(건강정보 고속도로)','','','외과 이성환 교수','실시간 마이헬스웨이 데이터 공여 플랫폼 · 운영체계 구축 및 산업 생태계 참여','미지정'],
+ ['가상환자, 가상병원 기반 의료기술개발 사업','','','외과 이성환 교수','가상환경 기반 디지털 의료서비스를 통해 충실한 정보전달, 보호자 참여 기회 증대, 환자의 자기결정권 강화','미지정'],
+ ['다기관-멀티모달 연합학습 기반 의료 인공지능 기술 시범모델 개발사업','','','외과 이성환 교수','환자 중심 다학제 진료 체계 지원 플랫폼 내 AI 에이전트의 사용자 맞춤형 기술 개발 및 적용','미지정'],
+ ['의료AI 혁신 생태계 조성사업(닥터앤서 3.0)','','','외과 이성환 교수','위암 수술 환자 데이터 기반 합병증 예측 AI와 맞춤형 케어플랜 검증','미지정'],
+ ['의료데이터 중심병원 지원사업','데중병원','안태진 사무원','외과 이성환 교수','1) 의료 빅데이터 활용을 통한 국민건강증진 및 미래 혁신 의료기술 사업 육성\n2) 지속가능한 보건의료 데이터 활용 생태계를 통한 의료 혁신•산업혁신 지원','의료데이터관리팀'],
+ ['의료AI 보건의료인 직무교육사업','직무교육','정무열 팀장, 김지원 사무원','외과 이성환 교수','병원 현장 중심의 AI 실무인재 양성을 통해 의료기관의 디지털 전환 가속화 및 지역별 AI 기술수준의 편차를 완화','AI전략운영팀'],
+ ['Physical AI 기반 의료로봇 기술통합센터 구축','피지컬AI','정무열 팀장, 김지원 사무원, 강유림 사무원','성형외과 김덕열 교수','인프라 구축을 통해 AI 기반 판단 기능과 로봇의 물리적 제어, 임상 안전성이 통합된 차세대 의료로봇의 시제품 개발부터 시험/평가, 실증, 인허가, 시장 진출에 이르는 전주기 지원 체계를 확립하고 국내 의료로봇 산업 기술 경쟁력 과 글로벌 시장 대응력을 강화','AI전략운영팀'],
+ ['독자 AI 파운데이션모델 사업','독파모','정무열 팀장, 김지원 사무원, 강유림 사무원','','병원 업무 및 의료 분야에서 LG AI 연구원이 개발한 K-EXAONE을 활용한 다양한 적용·실증 사례 발굴 및 추진 (컨소시엄 참여, 별도 예산 배정 없음)','AI전략운영팀'],
+ ['의료 데이터 스페이스 구축','스페이스','곽인혜 대리','외과 이성환 교수','1) 기관마다 서로 다른 형식으로 수집된 원시 데이터를 SNOMED CT 표준용어체계에 맞춰 정규화하는 데이터 표준화 Agent를 구축\n2) 비정형 영상검사 판독문에서 소견 단위로 개체명을 인식·추출하는 영상검사 NER Agent를 개발\n3) 두 Agent의 산출물과 약물·처방 등 정형 임상정보를 결합해 방문(내원) 단위의 진료경과 요약문을 생성하는 Agent를 완성하는 것','의료데이터관리팀'],
+ ['TRI-Agentic AI: 초개인화 질환 관리를 통한 예후 향상을 지원하는 Agentic AI 기반 토탈 솔루션 개발 및 실증','닥터앤서','곽인혜 대리','외과 이성환 교수','1) 6개 질환군(산모, 소아 만성호흡부전, 전립선비대증, 척추·관절 수술 재활, 위암, 대장암) 대상의 다기관 데이터 연계 기반 Agentic AI 의료 서비스 개발 및 실증\n2) 웨어러블·IoT 기기, Single AI Agent, 병원 데이터와 연동되는 통합 Agent 시스템을 통한 실시간 맞춤형 의료 대응 및 다기관 확장 실증','의료데이터관리팀'],
+ ['더 나은 환자 경험을 위한 클라우드 기반 디지털 의료서비스 모델 개발 및 실증','가상병원','곽인혜 대리','외과 이성환 교수','1) 환자 경험 개선을 위한 가상환경 기반 디지털 의료서비스 모델 개발 및 실증\n2) 가상환경 기반 의료서비스의 4대 시나리오에 대한 다음의 목표를 달성하고자 함','의료데이터관리팀'],
+ ['FLAME-ARK 솔루션 개발 실증: 환자 중심 협진 지원 AI','멀티모달','곽인혜 대리','외과 이성환 교수','1) 환자 중심 다학제 진료 체계 지원 솔루션 및 플랫폼 구축과 실증\n2) 환자 중심 다학제 진료 체계 지원 플랫폼 내 AI 에이전트의 사용자 맞춤형 기술 개발 및 적용','의료데이터관리팀'],
+ ['의료기관 AX 직무역량강화 컨설팅 사업','컨설팅','정무열 팀장, 강유림 사무원','','','AI전략운영팀'],
+ ['의료 AI 테스트베드 지원사업','테스트베드','이상휘 과장','','','디지털헬스팀'],
+ ['건강보험 빅데이터 분석센터 구축','분석센터','유승훈 선임연구원','','','미지정'],
+ ];
+ return {demo:false,projects:rows.map(([name,alias,manager,lead,description,team],i)=>({
+  id:`project-${i+1}`,code:`PRJ-${String(i+1).padStart(3,'0')}`,name,alias,manager,lead,description,team,
+  status:'진행',statusConfirmed:false,focus:false,agency:'',start:'',end:'',updated:'',author:'',program:'',note:'',
+  records:[],events:[],budgets:[],plans:[],changes:[],people:[],documents:[]
+ }))};
 }
