@@ -4,7 +4,7 @@ export type WorkgroupAttachment = {id:string;name:string;url?:string;fileKey?:st
 export type WorkgroupBlock = {id:string;heading:string;items:string[]};
 export type WorkgroupSection = {id:string;title:string;projectIds:string[];blocks:WorkgroupBlock[];attachments:WorkgroupAttachment[]};
 export type WorkgroupMeeting = {id:string;date:string;title:string;sections:WorkgroupSection[]};
-export type Workspace = { projects: Project[]; demo: boolean; scheduleRevision?:number; contentRevision?:number; workgroupRevision?:number; workgroups?:WorkgroupMeeting[] };
+export type Workspace = { projects: Project[]; demo: boolean; scheduleRevision?:number; contentRevision?:number; agencyRevision?:number; workgroupRevision?:number; workgroups?:WorkgroupMeeting[] };
 export const teams = ['AI전략운영팀', '의료데이터관리팀', '디지털헬스팀', '미지정'];
 export const organization = [
  {name:'디지털헬스팀',leader:'엄재준',members:['이상휘 과장','최운성 주임','남윤진 사무원']},
@@ -126,6 +126,27 @@ export function restoreMonitoringExamples(workspace:Workspace):Workspace {
   p.budgets=[...p.budgets,...template.budgets.filter(b=>!p.budgets.some(x=>x.id===b.id))];
  }
  next.contentRevision=1;return next;
+}
+
+// One-time sample agency migration. Keep institutions entered by users intact.
+export function fillAgencyExamples(workspace:Workspace):Workspace {
+ if(workspace.agencyRevision===1)return workspace;
+ const agencies:Record<string,string>={
+  'project-1':'한국보건의료정보원','project-2':'한국보건산업진흥원',
+  'project-3':'정보통신산업진흥원','project-4':'정보통신산업진흥원',
+  'project-5':'한국보건의료정보원','project-6':'한국보건복지인재원',
+  'project-7':'한국산업기술기획평가원','project-8':'과학기술정보통신부',
+  'project-9':'정보통신산업진흥원','project-10':'정보통신산업진흥원',
+  'project-11':'한국보건산업진흥원','project-12':'정보통신산업진흥원',
+  'project-13':'한국보건복지인재원','project-14':'한국보건산업진흥원',
+  'project-15':'국민건강보험공단','project-16':'한국보건산업진흥원'
+ };
+ return {...workspace,agencyRevision:1,projects:workspace.projects.map(p=>{
+  const agency=agencies[p.id];
+  if(!agency)return p;
+  const replace=!p.agency||/^지원기관 [ABC]$/.test(p.agency);
+  return {...p,agency:replace?agency:p.agency,budgets:p.budgets.map(b=>({...b,provider:!b.provider||/^지원기관 [ABC]$/.test(b.provider)?agency:b.provider}))};
+ })};
 }
 
 export function seedWorkgroups(workspace:Workspace):Workspace {
