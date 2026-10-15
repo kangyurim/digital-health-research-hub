@@ -67,7 +67,7 @@ export function addMonitoringExamples(workspace:Workspace):Workspace {
  return {...workspace,projects:workspace.projects.map(p=>{
   const e=examples[p.id];if(!e||p.exampleSeedVersion)return p;
   const prefix='example-'+p.id;
-  return {...p,focus:true,exampleSeedVersion:1,exampleData:true,statusConfirmed:p.statusConfirmed||true,
+  return {...p,focus:true,exampleSeedVersion:1,exampleData:false,statusConfirmed:p.statusConfirmed||true,
    agency:p.agency||e.agency,host:p.host||'분당차병원',start:p.start||e.start,end:p.end||e.end,
    yearStart:p.yearStart||e.start,yearEnd:p.yearEnd||'2026-12-31',annual:p.annual||true,round:p.round||'1',participation:p.participation||'주관',
    records:p.records.length?p.records:[
