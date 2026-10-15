@@ -1,18 +1,19 @@
 import {env} from 'cloudflare:workers';
 import {getChatGPTUser} from '../../chatgpt-auth';
+const SHARED_OWNER='site:appgprj_6acc749a70f4819180d7a2b218e832eb';
 export async function POST(req:Request){
  const user=await getChatGPTUser();if(!user)return new Response('Unauthorized',{status:401});
  if(req.headers.get('origin')&&new URL(req.headers.get('origin')!).host!==new URL(req.url).host)return new Response('Forbidden',{status:403});
  const form=await req.formData(), file=form.get('file');
  if(!(file instanceof File)||file.size>20*1024*1024)return Response.json({error:'20MB 이하의 파일을 선택해 주세요.'},{status:400});
- const key=`${user.userId}/${crypto.randomUUID()}`;
+ const key=`${SHARED_OWNER}/${crypto.randomUUID()}`;
  await env.BUCKET!.put(key,await file.arrayBuffer(),{httpMetadata:{contentType:file.type||'application/octet-stream'},customMetadata:{name:file.name}});
  return Response.json({fileKey:key,fileName:file.name});
 }
 export async function GET(req:Request){
  const user=await getChatGPTUser();if(!user)return new Response('Unauthorized',{status:401});
  const key=new URL(req.url).searchParams.get('key')||'';
- if(!key.startsWith(user.userId+'/'))return new Response('Forbidden',{status:403});
+ if(!key.startsWith(SHARED_OWNER+'/')&&!key.startsWith(user.userId+'/'))return new Response('Forbidden',{status:403});
  const obj=await env.BUCKET!.get(key);if(!obj)return new Response('Not found',{status:404});
  const name=obj.customMetadata?.name||'document', ext=name.split('.').pop()?.toLowerCase();
  const types:Record<string,string>={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',txt:'text/plain; charset=utf-8',pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation'};
