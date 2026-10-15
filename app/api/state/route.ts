@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
 import { getChatGPTUser } from '../../chatgpt-auth';
-import { makeDemo, useExampleNames, addMonitoringExamples } from '../../data';
+import { makeDemo, useExampleNames, addMonitoringExamples, normalizeSchedule } from '../../data';
 import { z } from 'zod';
 const item=z.object({id:z.string().min(1).max(100)}).passthrough();
 const project=item.extend({name:z.string().trim().min(1).max(300),code:z.string().min(1),team:z.string(),status:z.enum(['예정','진행','종료']),focus:z.boolean(),records:z.array(item).max(1000),events:z.array(item).max(1000),budgets:z.array(item).max(500),plans:z.array(item).max(1000),changes:z.array(item).max(1000),people:z.array(item).max(500),documents:z.array(item).max(1000),expenses:z.array(item).max(2000).optional(),settlements:z.array(item).max(100).optional()});
-const schema=z.object({revision:z.number().int().nonnegative(),data:z.object({demo:z.boolean(),projects:z.array(project).max(100)})});
+const schema=z.object({revision:z.number().int().nonnegative(),data:z.object({scheduleRevision:z.number().optional(),demo:z.boolean(),projects:z.array(project).max(100)})});
 export async function GET() {
  const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});
  const row=await env.DB!.prepare('SELECT data, revision FROM workspaces WHERE owner = ?').bind(user.userId).first<{data:string;revision:number}>();
@@ -16,7 +16,7 @@ export async function GET() {
  const names=new Set(existing.map((p:{name:string})=>p.name));
  stored.projects=[...existing,...makeDemo().projects.filter(p=>!names.has(p.name))];
  stored.demo=false;
- return Response.json({data:addMonitoringExamples(useExampleNames(stored)),revision:row.revision},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({data:normalizeSchedule(addMonitoringExamples(useExampleNames(stored))),revision:row.revision},{headers:{'Cache-Control':'no-store'}});
 }
 export async function PUT(req: Request) {
  const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});

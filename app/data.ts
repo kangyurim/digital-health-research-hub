@@ -1,6 +1,6 @@
 export type Item = { id: string; [key: string]: any };
 export type Project = Item & { name: string; code: string; team: string; status: string; focus: boolean; agency: string; lead: string; start: string; end: string; updated: string; description: string; records: Item[]; events: Item[]; budgets: Item[]; plans: Item[]; changes: Item[]; people: Item[]; documents: Item[] };
-export type Workspace = { projects: Project[]; demo: boolean };
+export type Workspace = { projects: Project[]; demo: boolean; scheduleRevision?:number };
 export const teams = ['AI전략운영팀', '의료데이터관리팀', '디지털헬스팀', '미지정'];
 export const organization = [
  {name:'디지털헬스팀',leader:'엄재준',members:['이상휘 과장','최운성 주임','남윤진 사무원']},
@@ -42,11 +42,11 @@ export function makeDemo(): Workspace {
  ['의료 AI 테스트베드 지원사업','테스트베드','이상휘 과장','','','디지털헬스팀'],
  ['건강보험 빅데이터 분석센터 구축','분석센터','유승훈 선임연구원','','','미지정'],
  ];
- return addMonitoringExamples({demo:false,projects:rows.map(([name,alias,manager,lead,description,team],i)=>({
+ return normalizeSchedule(addMonitoringExamples({demo:false,projects:rows.map(([name,alias,manager,lead,description,team],i)=>({
   id:`project-${i+1}`,code:`PRJ-${String(i+1).padStart(3,'0')}`,name,alias,manager:manager?`담당자${i+1}`:'',lead:lead?`책임자${i+1}`:'',description,team,
   status:'진행',statusConfirmed:false,focus:false,agency:'',start:'',end:'',updated:'',author:'',program:'',note:'',
   records:[],events:[],budgets:[],plans:[],changes:[],people:[],documents:[]
- }))});
+ }))}));
 }
 
 export function useExampleNames(workspace:Workspace):Workspace {
@@ -81,4 +81,22 @@ export function addMonitoringExamples(workspace:Workspace):Workspace {
     {id:prefix+'-b2',name:'간접비 (예시)',year:'2026',kind:'현금',costType:'간접비',source:'정부지원금',provider:e.agency,initial:e.total*0.1,spent:e.spent*0.1,date:'2026-10-15'}
    ]};
  })};
+}
+
+export function normalizeSchedule(workspace:Workspace):Workspace {
+ if(workspace.scheduleRevision===2)return workspace;
+ const clean=(v:any):any=>typeof v==='string'?v.replace(/\[예시\]\s*|\s*\(예시\)|예시\s*/g,''):Array.isArray(v)?v.map(clean):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,['id','fileKey','url','fileName'].includes(k)?x:clean(x)])):v;
+ const next:Workspace=clean(workspace);
+ next.projects=next.projects.map(p=>({...p,exampleData:false,events:p.events.filter(e=>!/^example-project-\d+-e\d+$/.test(e.id))}));
+ const host=next.projects.find(p=>p.id==='project-5')||next.projects[0];
+ const training=next.projects.find(p=>p.id==='project-6');
+ if(host)host.events.push(...[
+  {id:'working-group-20261001',title:'워킹그룹 회의',type:'회의',start:'2026-10-01',end:'2026-10-01',allDay:true,done:false,scope:'공통'},
+  {id:'working-group-20261022',title:'워킹그룹 회의',type:'회의',start:'2026-10-22',end:'2026-10-22',allDay:true,done:false,scope:'공통'}
+ ].filter(e=>!next.projects.some(p=>p.events.some(x=>x.id===e.id))));
+ if(training)training.events.push(...[
+  {id:'training-daegu-20261012',title:'[직무교육] 대구 5단계 4-8차 교육',type:'교육',start:'2026-10-12',end:'2026-10-16',allDay:true,done:false},
+  {id:'training-bundang-20261019',title:'[직무교육] 분당 5단계 4-8차 교육',type:'교육',start:'2026-10-19',end:'2026-10-23',allDay:true,done:false}
+ ].filter(e=>!next.projects.some(p=>p.events.some(x=>x.id===e.id))));
+ next.scheduleRevision=2;return next;
 }
