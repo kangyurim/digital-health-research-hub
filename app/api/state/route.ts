@@ -1,10 +1,14 @@
 import { env } from 'cloudflare:workers';
 import { getChatGPTUser } from '../../chatgpt-auth';
-import { makeDemo, useExampleNames, addMonitoringExamples, normalizeSchedule } from '../../data';
+import { makeDemo, useExampleNames, addMonitoringExamples, normalizeSchedule, restoreMonitoringExamples, seedWorkgroups } from '../../data';
 import { z } from 'zod';
 const item=z.object({id:z.string().min(1).max(100)}).passthrough();
 const project=item.extend({name:z.string().trim().min(1).max(300),code:z.string().min(1),team:z.string(),status:z.enum(['예정','진행','종료']),focus:z.boolean(),records:z.array(item).max(1000),events:z.array(item).max(1000),budgets:z.array(item).max(500),plans:z.array(item).max(1000),changes:z.array(item).max(1000),people:z.array(item).max(500),documents:z.array(item).max(1000),expenses:z.array(item).max(2000).optional(),settlements:z.array(item).max(100).optional()});
-const schema=z.object({revision:z.number().int().nonnegative(),data:z.object({scheduleRevision:z.number().optional(),demo:z.boolean(),projects:z.array(project).max(100)})});
+const attachment=z.object({id:z.string(),name:z.string(),url:z.string().optional(),fileKey:z.string().optional(),fileName:z.string().optional()});
+const block=z.object({id:z.string(),heading:z.string(),items:z.array(z.string()).max(100)});
+const section=z.object({id:z.string(),title:z.string(),projectIds:z.array(z.string()),blocks:z.array(block).max(30),attachments:z.array(attachment).max(30)});
+const meeting=z.object({id:z.string(),date:z.string(),title:z.string(),sections:z.array(section).max(100)});
+const schema=z.object({revision:z.number().int().nonnegative(),data:z.object({scheduleRevision:z.number().optional(),contentRevision:z.number().optional(),workgroupRevision:z.number().optional(),workgroups:z.array(meeting).max(100).optional(),demo:z.boolean(),projects:z.array(project).max(100)})});
 export async function GET() {
  const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});
  const row=await env.DB!.prepare('SELECT data, revision FROM workspaces WHERE owner = ?').bind(user.userId).first<{data:string;revision:number}>();
@@ -16,7 +20,7 @@ export async function GET() {
  const names=new Set(existing.map((p:{name:string})=>p.name));
  stored.projects=[...existing,...makeDemo().projects.filter(p=>!names.has(p.name))];
  stored.demo=false;
- return Response.json({data:normalizeSchedule(addMonitoringExamples(useExampleNames(stored))),revision:row.revision},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({data:seedWorkgroups(restoreMonitoringExamples(normalizeSchedule(addMonitoringExamples(useExampleNames(stored))))),revision:row.revision},{headers:{'Cache-Control':'no-store'}});
 }
 export async function PUT(req: Request) {
  const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});
@@ -47,6 +51,11 @@ export async function PUT(req: Request) {
    for(const key of ['recognized','disallowed','refund'])if(settlement[key]!==undefined&&settlement[key]!==''&&(!Number.isFinite(Number(settlement[key]))||Number(settlement[key])<0))return Response.json({error:'정산 금액은 0 이상 또는 미확정으로 입력해 주세요.'},{status:400});
   }
   for(const d of p.documents)if(d.url&&!/^https?:\/\//.test(String(d.url)))return Response.json({error:'문서 링크는 http 또는 https 주소여야 합니다.'},{status:400});
+ }
+ for(const meeting of data.workgroups||[])for(const section of meeting.sections){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(meeting.date)||!section.title.trim())return Response.json({error:'워킹그룹 회의 날짜와 제목을 확인해 주세요.'},{status:400});
+  if(section.projectIds.some(id=>!data.projects.some(p=>p.id===id)))return Response.json({error:'연결할 과제를 다시 선택해 주세요.'},{status:400});
+  for(const a of section.attachments)if(a.url&&!/^https?:\/\//.test(a.url)&&!/^\/workgroup\/[a-z0-9_.-]+$/i.test(a.url))return Response.json({error:'첨부 URL은 http 또는 https 주소여야 합니다.'},{status:400});
  }
  const value=JSON.stringify(data), now=new Date().toISOString();
  const result=revision===0?await env.DB!.prepare('INSERT INTO workspaces (owner,data,revision,updated_at) VALUES (?,?,1,?) ON CONFLICT(owner) DO NOTHING').bind(user.userId,value,now).run():await env.DB!.prepare('UPDATE workspaces SET data=?,revision=revision+1,updated_at=? WHERE owner=? AND revision=?').bind(value,now,user.userId,revision).run();
