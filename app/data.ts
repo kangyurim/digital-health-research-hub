@@ -87,7 +87,16 @@ export function normalizeSchedule(workspace:Workspace):Workspace {
  if(workspace.scheduleRevision===2)return workspace;
  const clean=(v:any):any=>typeof v==='string'?v.replace(/\[예시\]\s*|\s*\(예시\)|예시\s*/g,''):Array.isArray(v)?v.map(clean):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,['id','fileKey','url','fileName'].includes(k)?x:clean(x)])):v;
  const next:Workspace=clean(workspace);
- next.projects=next.projects.map(p=>({...p,exampleData:false,events:p.events.filter(e=>!/^example-project-\d+-e\d+$/.test(e.id))}));
+ next.projects=next.projects.map(p=>{
+  const seededDates:Record<string,string[]>={'project-5':['2026-01-01','2028-12-31'],'project-6':['2026-03-01','2026-12-31'],'project-9':['2026-04-01','2027-12-31']};
+  const dates=seededDates[p.id];
+  return {...p,exampleData:false,
+   agency:/^지원기관 [ABC]$/.test(p.agency)?'':p.agency,
+   ...(dates&&p.exampleSeedVersion?{start:p.start===dates[0]?'':p.start,end:p.end===dates[1]?'':p.end,yearStart:p.yearStart===dates[0]?'':p.yearStart,yearEnd:p.yearEnd==='2026-12-31'?'':p.yearEnd}:{}),
+   records:p.records.filter(r=>!/^example-project-\d+-r\d+$/.test(r.id)),
+   budgets:p.budgets.filter(b=>!/^example-project-\d+-b\d+$/.test(b.id)),
+   events:p.events.filter(e=>!/^example-project-\d+-e\d+$/.test(e.id))};
+ });
  const host=next.projects.find(p=>p.id==='project-5')||next.projects[0];
  const training=next.projects.find(p=>p.id==='project-6');
  if(host)host.events.push(...[
