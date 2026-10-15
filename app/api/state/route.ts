@@ -3,7 +3,7 @@ import { getChatGPTUser } from '../../chatgpt-auth';
 import { makeDemo } from '../../data';
 import { z } from 'zod';
 const item=z.object({id:z.string().min(1).max(100)}).passthrough();
-const project=item.extend({name:z.string().trim().min(1).max(300),code:z.string().min(1),team:z.string(),status:z.enum(['예정','진행','종료']),focus:z.boolean(),records:z.array(item).max(1000),events:z.array(item).max(1000),budgets:z.array(item).max(500),plans:z.array(item).max(1000),changes:z.array(item).max(1000),people:z.array(item).max(500),documents:z.array(item).max(1000)});
+const project=item.extend({name:z.string().trim().min(1).max(300),code:z.string().min(1),team:z.string(),status:z.enum(['예정','진행','종료']),focus:z.boolean(),records:z.array(item).max(1000),events:z.array(item).max(1000),budgets:z.array(item).max(500),plans:z.array(item).max(1000),changes:z.array(item).max(1000),people:z.array(item).max(500),documents:z.array(item).max(1000),expenses:z.array(item).max(2000).optional(),settlements:z.array(item).max(100).optional()});
 const schema=z.object({revision:z.number().int().nonnegative(),data:z.object({demo:z.boolean(),projects:z.array(project).max(100)})});
 export async function GET() {
  const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});
@@ -34,6 +34,13 @@ export async function PUT(req: Request) {
    const target=p.budgets.find(b=>b.id===c.categoryId&&b.year===c.year);if(!target)return Response.json({error:'동일 연도의 예산 비목을 선택해 주세요.'},{status:400});
    if(c.applied&&c.status!=='승인')return Response.json({error:'승인된 변경만 예산에 반영할 수 있습니다.'},{status:400});
    if(c.type==='비목 간 이동'){const from=p.budgets.find(b=>b.id===c.fromId&&b.year===c.year);if(!from||from.id===target.id||from.kind!==target.kind||Number(c.amount)<=0)return Response.json({error:'비목 이동은 동일 현금·현물 구분의 서로 다른 비목을 선택하고 양수를 입력하세요.'},{status:400});}
+  }
+  for(const expense of p.expenses||[]){
+   if(!Number.isFinite(Number(expense.amount))||Number(expense.amount)<0)return Response.json({error:'지출액은 0 이상의 금액이어야 합니다.'},{status:400});
+   if(!p.budgets.some(b=>b.id===expense.categoryId&&b.year===expense.year))return Response.json({error:'지출 내역에 동일 연도의 등록된 비목을 선택해 주세요.'},{status:400});
+  }
+  for(const settlement of p.settlements||[]){
+   for(const key of ['recognized','disallowed','refund'])if(settlement[key]!==undefined&&settlement[key]!==''&&(!Number.isFinite(Number(settlement[key]))||Number(settlement[key])<0))return Response.json({error:'정산 금액은 0 이상 또는 미확정으로 입력해 주세요.'},{status:400});
   }
   for(const d of p.documents)if(d.url&&!/^https?:\/\//.test(String(d.url)))return Response.json({error:'문서 링크는 http 또는 https 주소여야 합니다.'},{status:400});
  }

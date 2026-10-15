@@ -1,46 +1,59 @@
 'use client';
-
-import {useMemo,useState} from 'react';
-import {ArrowRight,CalendarDays,ChevronLeft,ChevronRight,ClipboardList,Coins,FileText,FolderKanban,Target} from 'lucide-react';
-import {budget,today,type Item,type Project} from './data';
-
+import {useState} from 'react';
+import {ArrowUpRight,ChevronLeft,ChevronRight,CalendarDays} from 'lucide-react';
+import {budget,categoryBudget,today,type Item,type Project} from './data';
 type Props={projects:Project[];year:string;onOpen:(project:Project,tab:number)=>void;onNavigate:(view:string)=>void};
-type Linked=Item&{project:Project};
-const won=(value:number)=>`${new Intl.NumberFormat('ko-KR').format(value)}원`;
-const ym=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-const ymd=(d:Date)=>`${ym(d)}-${String(d.getDate()).padStart(2,'0')}`;
-const shortDate=(value:string)=>value?value.slice(5,10).replace('-','.'):'—';
-
+const money=(n:number)=>new Intl.NumberFormat('ko-KR').format(n);
+const dayKey=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 export default function Overview({projects,year,onOpen,onNavigate}:Props){
- const [projectId,setProjectId]=useState('전체');
+ const [panel,setPanel]=useState<'projects'|'budget'>('projects');
+ const [projectId,setProjectId]=useState(projects[0]?.id||'');
+ const [budgetScope,setBudgetScope]=useState('전체');
+ const [historyId,setHistoryId]=useState('');
  const [mode,setMode]=useState<'월'|'주'|'일'>('월');
- const [month,setMonth]=useState(today().slice(0,7));
+ const [cursor,setCursor]=useState(today());
  const [selectedDay,setSelectedDay]=useState(today());
- const chosen=projects.find(p=>p.id===projectId);
- const scoped=chosen?[chosen]:projects;
- const budgeted=scoped.filter(p=>p.budgets.some(b=>b.year===year));
- const totals=budgeted.reduce((s,p)=>{const b=budget(p,year);return {total:s.total+b.total,spent:s.spent+b.spent,remaining:s.remaining+b.remaining}}, {total:0,spent:0,remaining:0});
- const events=useMemo(()=>scoped.flatMap(project=>project.events.map(event=>({...event,project} as Linked))).sort((a,b)=>String(a.start).localeCompare(String(b.start))),[scoped]);
- const records=useMemo(()=>scoped.flatMap(project=>project.records.map(record=>({...record,project} as Linked))).sort((a,b)=>String(b.date).localeCompare(String(a.date))),[scoped]);
- const issueRecords=records.filter(r=>r.issue).slice(0,4);
- const monthDate=new Date(`${month}-01T12:00:00`);
- const first=new Date(monthDate.getFullYear(),monthDate.getMonth(),1);
+ const [calendarScope,setCalendarScope]=useState('전체');
+ const project=projects.find(p=>p.id===projectId)||projects[0];
+ const records=[...(project?.records||[])].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+ const meetings=(project?.events||[]).filter(e=>e.type==='회의');
+ const history=[...records.map(r=>({id:`r:${r.id}`,date:String(r.date),title:r.title,type:'수행 보고',record:r})),...meetings.map(e=>({id:`e:${e.id}`,date:String(e.start).slice(0,10),title:e.title,type:'회의',record:records.find(r=>String(r.date)<=String(e.start).slice(0,10))}))].sort((a,b)=>b.date.localeCompare(a.date));
+ const selectedHistory=history.find(h=>h.id===historyId);
+ const record=selectedHistory?selectedHistory.record:records[0];
+ const budgetProjects=projects.filter(p=>budgetScope==='전체'||p.id===budgetScope);
+ const registered=budgetProjects.filter(p=>p.budgets.some(b=>b.year===year));
+ const total=registered.reduce((s,p)=>{const b=budget(p,year);return {total:s.total+b.total,spent:s.spent+b.spent,remaining:s.remaining+b.remaining}}, {total:0,spent:0,remaining:0});
+ const classified=(type:string)=>registered.flatMap(p=>p.budgets.filter(b=>b.year===year&&b.costType===type).map(b=>categoryBudget(p,b)));
+ const direct=classified('직접비'),indirect=classified('간접비');
+ const costCell=(rows:ReturnType<typeof categoryBudget>[])=>rows.length?<>{money(rows.reduce((n,b)=>n+b.total,0))}<small>집행 {money(rows.reduce((n,b)=>n+b.spent,0))}</small></>:'분류 미등록';
+ const events=projects.filter(p=>calendarScope==='전체'||p.id===calendarScope).flatMap(p=>p.events.map(e=>({...e,project:p} as Item&{project:Project}))).sort((a,b)=>String(a.start).localeCompare(String(b.start)));
+ const date=new Date(cursor+'T12:00:00');
+ const first=new Date(date.getFullYear(),date.getMonth(),1);
  const start=new Date(first);start.setDate(1-first.getDay());
- const cells=Array.from({length:42},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return ymd(d)});
- const selectedDate=new Date(`${selectedDay}T12:00:00`);
- const weekStart=new Date(selectedDate);weekStart.setDate(selectedDate.getDate()-selectedDate.getDay());
- const shown=mode==='월'?cells:mode==='주'?Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);return ymd(d)}):[selectedDay];
- const shift=(n:number)=>{const d=mode==='월'?new Date(monthDate):new Date(selectedDate);if(mode==='월')d.setMonth(d.getMonth()+n);else d.setDate(d.getDate()+n*(mode==='주'?7:1));setMonth(ym(d));setSelectedDay(ymd(d))};
- const dayEvents=events.filter(e=>String(e.start).slice(0,10)<=selectedDay&&String(e.end||e.start).slice(0,10)>=selectedDay);
- return <div className="overview-page">
-  <div className="page-heading"><div><span className="eyebrow">PORTFOLIO OVERVIEW</span><h1>통합 현황</h1><p>과제·사업예산·수행 일정의 등록 현황을 한곳에서 확인합니다.</p></div><span className="snapshot-date">오늘 {today().replaceAll('-','.')}</span></div>
-  <div className="overview-controls"><label>조회 범위 <select aria-label="통합 현황 과제 선택" value={projectId} onChange={e=>setProjectId(e.target.value)}><option value="전체">전체 과제</option>{projects.map(p=><option key={p.id} value={p.id}>{p.alias||p.name}</option>)}</select></label><span>{year}년 예산 기준 · 일정은 등록 자료 기준</span></div>
-  <div className="overview-top-grid">
-   <section className="overview-card portfolio-card"><div className="overview-card-head"><span className="overview-icon"><FolderKanban size={18}/></span><div><h2>등록 과제</h2><p>중점 / 전체</p></div><strong>{scoped.filter(p=>p.focus).length} <small>/ {scoped.length}</small></strong></div><div className="portfolio-split"><div><span>상태 확인</span><b>{scoped.filter(p=>p.statusConfirmed).length}건</b></div><div><span>상태 미확인</span><b>{scoped.filter(p=>!p.statusConfirmed).length}건</b></div></div><div className="mini-section-head"><strong>과제 목록</strong><button onClick={()=>onNavigate('projects')}>과제 관리 <ArrowRight size={13}/></button></div><div className="overview-projects">{scoped.map(p=><button key={p.id} onClick={()=>onOpen(p,0)}><span className="project-dot"/><span><strong>{p.alias||p.name}</strong><small>{p.team||'담당팀 미지정'} · {p.manager||'담당자 미지정'}</small></span><ChevronRight size={16}/></button>)}</div></section>
-   <section className="overview-card work-card"><div className="overview-card-head"><span className="overview-icon"><Target size={18}/></span><div><h2>사업 진행 현황</h2><p>최근 수행 기록과 확인할 이슈</p></div><button className="subtle-link" onClick={()=>onNavigate('projects')}>자세히 <ArrowRight size={13}/></button></div><div className="work-metrics"><div><b>{records.length}</b><span>등록된 수행 기록</span></div><div><b>{issueRecords.length}</b><span>최근 이슈 기록</span></div><div><b>{scoped.reduce((n,p)=>n+p.documents.length,0)}</b><span>등록 문서</span></div></div><div className="mini-section-head"><strong>최근 수행·이슈</strong><span>기록 기준</span></div><div className="overview-records">{records.slice(0,5).map(r=><button key={r.id} onClick={()=>onOpen(r.project,2)}><span className={r.issue?'issue-marker':'record-marker'}/><span><strong>{r.title||'제목 없는 기록'}</strong><small>{r.project.alias||r.project.name} · {r.date||'날짜 미등록'}</small>{r.issue&&<em>{r.issue}</em>}</span><ChevronRight size={15}/></button>)}{!records.length&&<div className="empty-message">등록된 수행 기록이 없습니다.<br/>과제관리에서 기록을 추가할 수 있습니다.</div>}</div></section>
-  </div>
-  <section className="overview-card budget-overview"><div className="overview-card-head"><span className="overview-icon"><Coins size={18}/></span><div><h2>사업 예산 현황</h2><p>{year}년 · 우리 기관 배정 예산</p></div><button className="subtle-link" onClick={()=>onNavigate('budget')}>예산·집행 보기 <ArrowRight size={13}/></button></div>{budgeted.length?<><div className="overview-budget-grid"><div><span>현재 예산</span><strong>{won(totals.total)}</strong></div><div><span>누적 집행액</span><strong>{won(totals.spent)}</strong></div><div><span>잔액</span><strong>{won(totals.remaining)}</strong></div><div><span>집행률</span><strong>{totals.total>0?`${(totals.spent/totals.total*100).toFixed(1)}%`:'산정 불가'}</strong></div></div><div className="budget-track"><span style={{width:`${Math.min(100,totals.total>0?totals.spent/totals.total*100:0)}%`}}/></div><p className="overview-note">예산 등록 {budgeted.length} / {scoped.length}건 · 미등록 과제는 합계에서 제외</p></>:<div className="budget-blank"><Coins size={26}/><strong>등록된 예산 자료가 없습니다.</strong><span>과제관리의 예산집행현황 탭에서 예산 비목을 등록하면 이곳에 합산됩니다.</span></div>}</section>
-  <section className="overview-card schedule-overview"><div className="overview-card-head"><span className="overview-icon"><CalendarDays size={18}/></span><div><h2>일정 달력</h2><p>과제별 회의·보고·평가 및 마감</p></div><button className="subtle-link" onClick={()=>onNavigate('calendar')}>일정 관리 <ArrowRight size={13}/></button></div><div className="schedule-toolbar"><div><button aria-label="이전 기간" onClick={()=>shift(-1)}><ChevronLeft size={18}/></button><strong>{mode==='월'?`${monthDate.getFullYear()}년 ${monthDate.getMonth()+1}월`:mode==='주'?`${shortDate(shown[0])} ~ ${shortDate(shown[6])}`:selectedDay}</strong><button aria-label="다음 기간" onClick={()=>shift(1)}><ChevronRight size={18}/></button><button className="today-button" onClick={()=>{setMonth(today().slice(0,7));setSelectedDay(today())}}>오늘</button></div><div className="schedule-modes" aria-label="달력 표시 방식">{(['일','주','월'] as const).map(value=><button key={value} className={mode===value?'active':''} onClick={()=>setMode(value)}>{value}</button>)}</div></div><div className={`overview-calendar ${mode==='일'?'single-day':''}`}>{mode!=='일'&&['일','월','화','수','목','금','토'].map((day,i)=><div className="calendar-label" key={i}>{day}</div>)}{shown.map(day=>{const related=events.filter(e=>String(e.start).slice(0,10)<=day&&String(e.end||e.start).slice(0,10)>=day);return <button key={day} className={`overview-day ${day.slice(0,7)!==month&&mode==='월'?'outside':''} ${day===today()?'today':''} ${day===selectedDay?'selected':''}`} onClick={()=>setSelectedDay(day)}><span>{mode==='일'?day:Number(day.slice(-2))}</span>{related.slice(0,2).map(e=><small key={e.id}>{e.title}</small>)}{related.length>2&&<em>+{related.length-2}건</em>}</button>})}</div><div className="selected-events"><strong>{selectedDay.replaceAll('-','.')} 일정</strong>{dayEvents.length?dayEvents.map(e=><button key={e.id} onClick={()=>onOpen(e.project,2)}><span>{String(e.start).slice(11,16)||'종일'}</span><b>{e.title}</b><small>{e.project.alias||e.project.name}</small><ChevronRight size={14}/></button>):<p>등록된 일정이 없습니다.</p>}</div></section>
-  <div className="overview-bottom"><div><ClipboardList size={17}/><span>과제별 상세 업무 정보는 과제관리 화면에서 확인·수정합니다.</span></div><button onClick={()=>onNavigate('projects')}>과제관리로 이동 <ArrowRight size={14}/></button></div>
+ const week=new Date(date);week.setDate(date.getDate()-date.getDay());
+ const cells=Array.from({length:mode==='월'?Math.ceil((first.getDay()+new Date(date.getFullYear(),date.getMonth()+1,0).getDate())/7)*7:mode==='주'?7:1},(_,i)=>{const d=new Date(mode==='월'?start:mode==='주'?week:date);d.setDate(d.getDate()+i);return dayKey(d)});
+ const onDay=(key:string)=>events.filter(e=>String(e.start).slice(0,10)<=key&&String(e.end||e.start).slice(0,10)>=key);
+ const shift=(n:number)=>{const d=new Date(date);if(mode==='월'){d.setDate(1);d.setMonth(d.getMonth()+n)}else d.setDate(d.getDate()+n*(mode==='주'?7:1));setCursor(dayKey(d));setSelectedDay(dayKey(d))};
+ return <div className="wire-overview">
+  <div className="wire-title"><h1>통합 현황</h1><span>{today().replaceAll('-','.')} 기준</span></div>
+  <section className="wire-summary">
+   <div className="wire-summary-menu" role="tablist" aria-label="현황 구분">
+    <button role="tab" aria-selected={panel==='projects'} className={panel==='projects'?'selected':''} onClick={()=>setPanel('projects')}><span>등록 과제 <small>(중점/전체)</small></span><strong>{projects.filter(p=>p.focus).length} <i>/</i> {projects.length}<ChevronRight size={16}/></strong></button>
+    <button role="tab" aria-selected={panel==='budget'} className={panel==='budget'?'selected':''} onClick={()=>setPanel('budget')}><span>사업 예산 현황</span><small>{year}년 · 우리 기관 배정 예산</small><ChevronRight size={16}/></button>
+   </div>
+   <div className="wire-summary-content">
+    {panel==='projects'?<><div className="wire-panel-heading"><h2>등록 과제</h2><button onClick={()=>onNavigate('projects')}>자세히 · 과제 관리 <ArrowUpRight size={14}/></button></div><div className="wire-project-layout">
+     <div className="wire-project-list" aria-label="현황 조회 과제">{projects.map(p=><button key={p.id} title={p.name} aria-pressed={p.id===project?.id} className={p.id===project?.id?'selected':''} onClick={()=>{setProjectId(p.id);setHistoryId('')}}><span>{p.alias||p.name}</span><ChevronRight size={13}/></button>)}</div>
+     <div className="wire-progress"><div className="wire-subheading"><strong>사업 진행 현황</strong><span>{selectedHistory?selectedHistory.date:'최근 기록'}</span></div>{project&&<p className="wire-project-caption" title={project.name}>{project.alias||project.name} · {project.manager||'담당 미지정'}</p>}{record?<div className="wire-record"><h3>{record.title}</h3>{[['주요 진행 현황',record.progress],['수행 이슈',record.issue],['향후 계획',record.plan]].map(([label,value])=><div key={label}><strong>{label}</strong><p>{value||'등록된 내용이 없습니다.'}</p></div>)}</div>:<div className="wire-empty">{selectedHistory?'선택한 회의일까지 등록된 수행 보고가 없습니다.':'등록된 수행 기록이 없습니다.'}{project&&<button onClick={()=>onOpen(project,2)}>수행 현황 등록·조회 <ArrowUpRight size={13}/></button>}</div>}</div>
+     <div className="wire-history"><div className="wire-subheading"><strong>워킹그룹 회의·보고</strong><span>최신순</span></div><div>{history.map(h=><button key={h.id} className={selectedHistory?.id===h.id||(!historyId&&h.record?.id===records[0]?.id&&h.type==='수행 보고')?'selected':''} onClick={()=>setHistoryId(h.id)}><small>{h.date.replaceAll('-','.')} · {h.type}</small><strong>{h.title}</strong></button>)}{!history.length&&<div className="wire-empty">등록된 회의·보고가 없습니다.</div>}</div></div>
+    </div></>:<><div className="wire-panel-heading"><h2>사업 예산</h2><button onClick={()=>onNavigate('budget')}>자세히 · 예산·집행 <ArrowUpRight size={14}/></button><select aria-label="예산 조회 과제" value={budgetScope} onChange={e=>setBudgetScope(e.target.value)}><option value="전체">전체 과제</option>{projects.map(p=><option key={p.id} value={p.id}>{p.alias||p.name}</option>)}</select></div><div className="wire-budget"><table><thead><tr>{['현재 예산','집행액','직접비','간접비','집행률'].map(t=><th key={t}>{t}</th>)}</tr></thead><tbody><tr><td>{registered.length?money(total.total):'미등록'}</td><td>{registered.length?money(total.spent):'미등록'}</td><td>{costCell(direct)}</td><td>{costCell(indirect)}</td><td>{registered.length&&total.total>0?(total.spent/total.total*100).toFixed(1)+'%':'—'}<div className="wire-rate"><i style={{width:`${Math.max(0,Math.min(100,total.total>0?total.spent/total.total*100:0))}%`}}/></div></td></tr></tbody></table><p>단위: 원 · 잔액 {registered.length?money(total.remaining):'미등록'} · 예산 등록 {registered.length}/{budgetProjects.length}건 · 미등록 과제는 합계에서 제외</p></div></>}
+   </div>
+  </section>
+  <section className="wire-calendar">
+   <div className="wire-panel-heading"><h2>일정 달력</h2><div className="wire-calendar-options"><select aria-label="달력 과제" value={calendarScope} onChange={e=>setCalendarScope(e.target.value)}><option value="전체">전체 과제 일정</option>{projects.map(p=><option key={p.id} value={p.id}>{p.alias||p.name}</option>)}</select><select aria-label="일정 보기 단위" value={mode} onChange={e=>setMode(e.target.value as '월'|'주'|'일')}><option>월</option><option>주</option><option>일</option></select></div></div>
+   <div className="wire-calendar-toolbar"><button aria-label="이전 기간" onClick={()=>shift(-1)}><ChevronLeft size={19}/></button><strong>{mode==='월'?`${date.getFullYear()}년 ${date.getMonth()+1}월`:mode==='주'?`${cells[0]} ~ ${cells[6]}`:cursor}</strong><button aria-label="다음 기간" onClick={()=>shift(1)}><ChevronRight size={19}/></button><button onClick={()=>{setCursor(today());setSelectedDay(today())}}>오늘</button><span><i/>회의·보고·평가·마감</span></div>
+   <div className={`wire-calendar-grid mode-${mode}`}>{mode!=='일'&&['일','월','화','수','목','금','토'].map((d,i)=><div key={d} className={`wire-weekday weekday-${i}`}>{d}</div>)}{cells.map(key=><div key={key} className={`wire-day ${key.slice(0,7)!==cursor.slice(0,7)&&mode==='월'?'outside':''} ${key===selectedDay?'selected':''} ${key===today()?'today':''}`}><button className="wire-day-number" aria-label={`${key} 일정 조회`} onClick={()=>setSelectedDay(key)}>{mode==='일'?key:Number(key.slice(-2))}</button>{onDay(key).slice(0,mode==='월'?3:12).map(e=><button className={`wire-event ${e.done?'done':''}`} key={e.id} title={`${e.project.alias||e.project.name} · ${e.title}`} onClick={()=>{setSelectedDay(key);onOpen(e.project,2)}}><span>{String(e.start).slice(11,16)}</span>{e.title}</button>)}{mode==='월'&&onDay(key).length>3&&<button className="wire-more" onClick={()=>{setCursor(key);setSelectedDay(key);setMode('일')}}>+{onDay(key).length-3}건 더 보기</button>}</div>)}</div>
+   <div className="wire-day-details"><strong><CalendarDays size={15}/>{selectedDay.replaceAll('-','.')}</strong>{onDay(selectedDay).length?onDay(selectedDay).map(e=><button key={e.id} onClick={()=>onOpen(e.project,2)}>{String(e.start).slice(11,16)} · {e.title}<small>{e.project.alias||e.project.name}</small><ArrowUpRight size={13}/></button>):<span>등록된 일정이 없습니다.</span>}</div>
+  </section>
  </div>;
 }
