@@ -70,10 +70,7 @@ export function addMonitoringExamples(workspace:Workspace):Workspace {
   return {...p,focus:true,exampleSeedVersion:1,exampleData:false,statusConfirmed:p.statusConfirmed||true,
    agency:p.agency||e.agency,host:p.host||'분당차병원',start:p.start||e.start,end:p.end||e.end,
    yearStart:p.yearStart||e.start,yearEnd:p.yearEnd||'2026-12-31',annual:p.annual||true,round:p.round||'1',participation:p.participation||'주관',
-   records:p.records.length?p.records:[
-    {id:prefix+'-r1',date:'2026-10-08',title:'10월 1차 워킹그룹 보고',author:p.manager||'담당자1',progress:'당해연도 세부 추진계획을 점검하고 부서별 수행 범위를 정리했습니다.',issue:'협력부서 검토 일정 확정이 필요합니다.',plan:'10월 중간점검 회의에서 담당 업무와 일정을 확정합니다.',followup:'담당자별 확인 사항 취합'},
-    {id:prefix+'-r2',date:'2026-10-15',title:'10월 2차 워킹그룹 보고',author:p.manager||'담당자1',progress:'주요 산출물 초안 검토를 완료하고 4분기 추진 일정을 조정했습니다.',issue:'지원기관 제출자료의 최종 검토 담당자 지정이 필요합니다.',plan:'10월 22일 중간점검 후 10월 30일까지 보고자료를 취합합니다.',discussion:'추가 검토 회의 일정 및 자료 제출 범위',followup:'검토 결과는 다음 워킹그룹에 보고'}
-   ],
+   records:p.records,
    events:p.events.length?p.events:[
     {id:prefix+'-e1',title:'[예시] 1차 워킹그룹 회의',type:'회의',start:'2026-10-08T09:00',end:'2026-10-08T10:00',owner:p.manager,place:'분당차병원 회의실',done:true},
     {id:prefix+'-e2',title:'[예시] 2차 워킹그룹 회의',type:'회의',start:'2026-10-15T09:00',end:'2026-10-15T10:00',owner:p.manager,place:'분당차병원 회의실',done:false},
@@ -126,6 +123,16 @@ export function restoreMonitoringExamples(workspace:Workspace):Workspace {
   p.budgets=[...p.budgets,...template.budgets.filter(b=>!p.budgets.some(x=>x.id===b.id))];
  }
  next.contentRevision=1;return next;
+}
+
+// Remove only the invented October reports from the original sample seed.
+// Actual user-created records, including other working-group reports, remain intact.
+export function removeInventedReports(workspace:Workspace):Workspace {
+ return {...workspace,projects:workspace.projects.map(p=>({...p,records:p.records.filter(r=>
+  !(/^example-project-(5|6|9)-r[12]$/.test(r.id)&&
+    ((r.date==='2026-10-08'&&r.title==='10월 1차 워킹그룹 보고')||
+     (r.date==='2026-10-15'&&r.title==='10월 2차 워킹그룹 보고')))
+ )}))};
 }
 
 // One-time sample agency migration. Keep institutions entered by users intact.

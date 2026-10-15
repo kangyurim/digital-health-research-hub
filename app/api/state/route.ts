@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getChatGPTUser } from '../../chatgpt-auth';
-import { makeDemo, useExampleNames, addMonitoringExamples, normalizeSchedule, restoreMonitoringExamples, seedWorkgroups, fillAgencyExamples } from '../../data';
+import { makeDemo, useExampleNames, addMonitoringExamples, normalizeSchedule, restoreMonitoringExamples, seedWorkgroups, fillAgencyExamples, removeInventedReports } from '../../data';
 import { z } from 'zod';
 const item=z.object({id:z.string().min(1).max(100)}).passthrough();
 const SHARED_OWNER='site:appgprj_6acc749a70f4819180d7a2b218e832eb';
@@ -25,7 +25,7 @@ export async function GET() {
  const names=new Set(existing.map((p:{name:string})=>p.name));
  stored.projects=[...existing,...makeDemo().projects.filter(p=>!names.has(p.name))];
  stored.demo=false;
- return Response.json({data:fillAgencyExamples(seedWorkgroups(restoreMonitoringExamples(normalizeSchedule(addMonitoringExamples(useExampleNames(stored)))))),revision:row.revision},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({data:removeInventedReports(fillAgencyExamples(seedWorkgroups(restoreMonitoringExamples(normalizeSchedule(addMonitoringExamples(useExampleNames(stored))))))),revision:row.revision},{headers:{'Cache-Control':'no-store'}});
 }
 export async function PUT(req: Request) {
  const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});
