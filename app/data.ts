@@ -42,9 +42,43 @@ export function makeDemo(): Workspace {
  ['의료 AI 테스트베드 지원사업','테스트베드','이상휘 과장','','','디지털헬스팀'],
  ['건강보험 빅데이터 분석센터 구축','분석센터','유승훈 선임연구원','','','미지정'],
  ];
- return {demo:false,projects:rows.map(([name,alias,manager,lead,description,team],i)=>({
-  id:`project-${i+1}`,code:`PRJ-${String(i+1).padStart(3,'0')}`,name,alias,manager,lead,description,team,
+ return addMonitoringExamples({demo:false,projects:rows.map(([name,alias,manager,lead,description,team],i)=>({
+  id:`project-${i+1}`,code:`PRJ-${String(i+1).padStart(3,'0')}`,name,alias,manager:manager?`담당자${i+1}`:'',lead:lead?`책임자${i+1}`:'',description,team,
   status:'진행',statusConfirmed:false,focus:false,agency:'',start:'',end:'',updated:'',author:'',program:'',note:'',
   records:[],events:[],budgets:[],plans:[],changes:[],people:[],documents:[]
- }))};
+ }))});
+}
+
+export function useExampleNames(workspace:Workspace):Workspace {
+ return {...workspace,projects:workspace.projects.map((p,i)=>({...p,lead:p.lead&&/교수|이성환|김덕열/.test(p.lead)?'책임자'+(i+1):p.lead,manager:p.manager&&/사무원|팀장|대리|과장|연구원/.test(p.manager)?'담당자'+(i+1):p.manager}))};
+}
+
+// Explicitly requested demonstration records; never replace entered operational data.
+export function addMonitoringExamples(workspace:Workspace):Workspace {
+ const examples:Record<string,{agency:string;total:number;spent:number;start:string;end:string}>={
+  'project-5':{agency:'예시 지원기관 A',total:800000000,spent:480000000,start:'2026-01-01',end:'2028-12-31'},
+  'project-6':{agency:'예시 지원기관 B',total:300000000,spent:165000000,start:'2026-03-01',end:'2026-12-31'},
+  'project-9':{agency:'예시 지원기관 C',total:500000000,spent:210000000,start:'2026-04-01',end:'2027-12-31'}
+ };
+ return {...workspace,projects:workspace.projects.map(p=>{
+  const e=examples[p.id];if(!e||p.exampleSeedVersion)return p;
+  const prefix='example-'+p.id;
+  return {...p,focus:true,exampleSeedVersion:1,exampleData:true,statusConfirmed:p.statusConfirmed||true,
+   agency:p.agency||e.agency,host:p.host||'분당차병원',start:p.start||e.start,end:p.end||e.end,
+   yearStart:p.yearStart||e.start,yearEnd:p.yearEnd||'2026-12-31',annual:p.annual||true,round:p.round||'1',participation:p.participation||'주관',
+   records:p.records.length?p.records:[
+    {id:prefix+'-r1',date:'2026-10-08',title:'[예시] 10월 1차 워킹그룹 보고',author:p.manager||'담당자1',progress:'당해연도 세부 추진계획을 점검하고 부서별 수행 범위를 정리했습니다.',issue:'협력부서 검토 일정 확정이 필요합니다.',plan:'10월 중간점검 회의에서 담당 업무와 일정을 확정합니다.',followup:'담당자별 확인 사항 취합'},
+    {id:prefix+'-r2',date:'2026-10-15',title:'[예시] 10월 2차 워킹그룹 보고',author:p.manager||'담당자1',progress:'주요 산출물 초안 검토를 완료하고 4분기 추진 일정을 조정했습니다.',issue:'지원기관 제출자료의 최종 검토 담당자 지정이 필요합니다.',plan:'10월 22일 중간점검 후 10월 30일까지 보고자료를 취합합니다.',discussion:'추가 검토 회의 일정 및 자료 제출 범위',followup:'검토 결과는 다음 워킹그룹에 보고'}
+   ],
+   events:p.events.length?p.events:[
+    {id:prefix+'-e1',title:'[예시] 1차 워킹그룹 회의',type:'회의',start:'2026-10-08T09:00',end:'2026-10-08T10:00',owner:p.manager,place:'분당차병원 회의실',done:true},
+    {id:prefix+'-e2',title:'[예시] 2차 워킹그룹 회의',type:'회의',start:'2026-10-15T09:00',end:'2026-10-15T10:00',owner:p.manager,place:'분당차병원 회의실',done:false},
+    {id:prefix+'-e3',title:'[예시] 중간점검 회의',type:'회의',start:'2026-10-22T14:00',end:'2026-10-22T15:30',owner:p.manager,done:false},
+    {id:prefix+'-e4',title:'[예시] 월간 보고자료 마감',type:'보고',start:'2026-10-30T16:00',end:'2026-10-30T17:00',owner:p.manager,done:false}
+   ],
+   budgets:p.budgets.length?p.budgets:[
+    {id:prefix+'-b1',name:'연구활동비 (예시)',year:'2026',kind:'현금',costType:'직접비',source:'정부지원금',provider:e.agency,initial:e.total*0.9,spent:e.spent*0.9,date:'2026-10-15'},
+    {id:prefix+'-b2',name:'간접비 (예시)',year:'2026',kind:'현금',costType:'간접비',source:'정부지원금',provider:e.agency,initial:e.total*0.1,spent:e.spent*0.1,date:'2026-10-15'}
+   ]};
+ })};
 }

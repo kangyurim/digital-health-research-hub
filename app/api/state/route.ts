@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getChatGPTUser } from '../../chatgpt-auth';
-import { makeDemo } from '../../data';
+import { makeDemo, useExampleNames, addMonitoringExamples } from '../../data';
 import { z } from 'zod';
 const item=z.object({id:z.string().min(1).max(100)}).passthrough();
 const project=item.extend({name:z.string().trim().min(1).max(300),code:z.string().min(1),team:z.string(),status:z.enum(['예정','진행','종료']),focus:z.boolean(),records:z.array(item).max(1000),events:z.array(item).max(1000),budgets:z.array(item).max(500),plans:z.array(item).max(1000),changes:z.array(item).max(1000),people:z.array(item).max(500),documents:z.array(item).max(1000),expenses:z.array(item).max(2000).optional(),settlements:z.array(item).max(100).optional()});
@@ -16,7 +16,7 @@ export async function GET() {
  const names=new Set(existing.map((p:{name:string})=>p.name));
  stored.projects=[...existing,...makeDemo().projects.filter(p=>!names.has(p.name))];
  stored.demo=false;
- return Response.json({data:stored,revision:row.revision},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({data:addMonitoringExamples(useExampleNames(stored)),revision:row.revision},{headers:{'Cache-Control':'no-store'}});
 }
 export async function PUT(req: Request) {
  const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});
@@ -25,6 +25,10 @@ export async function PUT(req: Request) {
  let parsed;try{parsed=schema.safeParse(JSON.parse(raw));}catch{return Response.json({error:'올바른 JSON이 아닙니다.'},{status:400});}
  if(!parsed.success)return Response.json({error:'입력 항목을 확인해 주세요.'},{status:400});
  const {data,revision}=parsed.data;
+ const previous=await env.DB!.prepare('SELECT data FROM workspaces WHERE owner = ?').bind(user.userId).first<{data:string}>();
+ const previousProjects=previous?JSON.parse(previous.data).projects:makeDemo().projects;
+ for(const p of data.projects){const old=previousProjects.find((x:{id:string})=>x.id===p.id);if(old&&old.code!==p.code)return Response.json({error:'과제번호는 수정할 수 없습니다.'},{status:400});}
+
  if(new Set(data.projects.map(p=>p.code)).size!==data.projects.length)return Response.json({error:'과제 번호가 중복됩니다.'},{status:400});
  for(const p of data.projects){
   if(p.start && p.end && String(p.start)>String(p.end))return Response.json({error:'과제 종료일을 확인해 주세요.'},{status:400});
