@@ -1,15 +1,15 @@
 import { env } from 'cloudflare:workers';
 import { getChatGPTUser } from '../../chatgpt-auth';
-import { makeDemo, useExampleNames, addMonitoringExamples, normalizeSchedule, restoreMonitoringExamples, seedWorkgroups, fillAgencyExamples, removeInventedReports } from '../../data';
+import { makeDemo, useExampleNames, addMonitoringExamples, normalizeSchedule, restoreMonitoringExamples, seedWorkgroups, fillAgencyExamples, removeInventedReports, fillProjectExamples } from '../../data';
 import { z } from 'zod';
 const item=z.object({id:z.string().min(1).max(100)}).passthrough();
 const SHARED_OWNER='site:appgprj_6acc749a70f4819180d7a2b218e832eb';
-const project=item.extend({name:z.string().trim().min(1).max(300),code:z.string().min(1),team:z.string(),status:z.enum(['예정','진행','종료']),focus:z.boolean(),records:z.array(item).max(1000),events:z.array(item).max(1000),budgets:z.array(item).max(500),plans:z.array(item).max(1000),changes:z.array(item).max(1000),people:z.array(item).max(500),documents:z.array(item).max(1000),expenses:z.array(item).max(2000).optional(),settlements:z.array(item).max(100).optional()});
+const project=item.extend({name:z.string().trim().min(1).max(300),code:z.string().min(1),team:z.string(),status:z.enum(['예정','진행','종료']),focus:z.boolean(),records:z.array(item).max(1000),events:z.array(item).max(1000),budgets:z.array(item).max(500),plans:z.array(item).max(1000),changes:z.array(item).max(1000),people:z.array(item).max(500),documents:z.array(item).max(1000),metrics:z.array(item).max(100).optional(),expenses:z.array(item).max(2000).optional(),settlements:z.array(item).max(100).optional()});
 const attachment=z.object({id:z.string(),name:z.string(),url:z.string().optional(),fileKey:z.string().optional(),fileName:z.string().optional()});
 const block=z.object({id:z.string(),heading:z.string(),items:z.array(z.string()).max(100)});
 const section=z.object({id:z.string(),title:z.string(),projectIds:z.array(z.string()),blocks:z.array(block).max(30),attachments:z.array(attachment).max(30)});
 const meeting=z.object({id:z.string(),date:z.string(),title:z.string(),sections:z.array(section).max(100)});
-const schema=z.object({revision:z.number().int().nonnegative(),data:z.object({scheduleRevision:z.number().optional(),contentRevision:z.number().optional(),agencyRevision:z.number().optional(),workgroupRevision:z.number().optional(),workgroups:z.array(meeting).max(100).optional(),demo:z.boolean(),projects:z.array(project).max(100)})});
+const schema=z.object({revision:z.number().int().nonnegative(),data:z.object({scheduleRevision:z.number().optional(),contentRevision:z.number().optional(),agencyRevision:z.number().optional(),sampleRevision:z.number().optional(),workgroupRevision:z.number().optional(),workgroups:z.array(meeting).max(100).optional(),demo:z.boolean(),projects:z.array(project).max(100)})});
 export async function GET() {
  const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});
  let row=await env.DB!.prepare('SELECT data, revision FROM workspaces WHERE owner = ?').bind(SHARED_OWNER).first<{data:string;revision:number}>();
@@ -17,7 +17,7 @@ export async function GET() {
   const legacy=await env.DB!.prepare('SELECT data, revision FROM workspaces ORDER BY updated_at DESC LIMIT 1').first<{data:string;revision:number}>();
   if(legacy){await env.DB!.prepare('INSERT INTO workspaces (owner,data,revision,updated_at) VALUES (?,?,?,?) ON CONFLICT(owner) DO NOTHING').bind(SHARED_OWNER,legacy.data,legacy.revision,new Date().toISOString()).run();row=legacy;}
  }
- if (!row) return Response.json({data:fillAgencyExamples(makeDemo()),revision:0},{headers:{'Cache-Control':'no-store'}});
+ if (!row) return Response.json({data:fillProjectExamples(fillAgencyExamples(makeDemo())),revision:0},{headers:{'Cache-Control':'no-store'}});
  const stored=JSON.parse(row.data);
  // Earlier preview data was explicitly marked demo. Replace only those fictional rows;
  // preserve any real projects the owner already entered.
@@ -25,7 +25,7 @@ export async function GET() {
  const names=new Set(existing.map((p:{name:string})=>p.name));
  stored.projects=[...existing,...makeDemo().projects.filter(p=>!names.has(p.name))];
  stored.demo=false;
- return Response.json({data:removeInventedReports(fillAgencyExamples(seedWorkgroups(restoreMonitoringExamples(normalizeSchedule(addMonitoringExamples(useExampleNames(stored))))))),revision:row.revision},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({data:fillProjectExamples(removeInventedReports(fillAgencyExamples(seedWorkgroups(restoreMonitoringExamples(normalizeSchedule(addMonitoringExamples(useExampleNames(stored)))))))),revision:row.revision},{headers:{'Cache-Control':'no-store'}});
 }
 export async function PUT(req: Request) {
  const user=await getChatGPTUser();if(!user)return Response.json({error:'로그인이 필요합니다.'},{status:401});

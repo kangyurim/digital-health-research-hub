@@ -4,7 +4,7 @@ export type WorkgroupAttachment = {id:string;name:string;url?:string;fileKey?:st
 export type WorkgroupBlock = {id:string;heading:string;items:string[]};
 export type WorkgroupSection = {id:string;title:string;projectIds:string[];blocks:WorkgroupBlock[];attachments:WorkgroupAttachment[]};
 export type WorkgroupMeeting = {id:string;date:string;title:string;sections:WorkgroupSection[]};
-export type Workspace = { projects: Project[]; demo: boolean; scheduleRevision?:number; contentRevision?:number; agencyRevision?:number; workgroupRevision?:number; workgroups?:WorkgroupMeeting[] };
+export type Workspace = { projects: Project[]; demo: boolean; scheduleRevision?:number; contentRevision?:number; agencyRevision?:number; sampleRevision?:number; workgroupRevision?:number; workgroups?:WorkgroupMeeting[] };
 export const teams = ['AI전략운영팀', '의료데이터관리팀', '디지털헬스팀', '미지정'];
 export const organization = [
  {name:'디지털헬스팀',leader:'엄재준',members:['이상휘 과장','최운성 주임','남윤진 사무원']},
@@ -154,6 +154,60 @@ export function fillAgencyExamples(workspace:Workspace):Workspace {
   const replace=!p.agency||/^지원기관 [ABC]$/.test(p.agency);
   return {...p,agency:replace?agency:p.agency,budgets:p.budgets.map(b=>({...b,provider:!b.provider||/^지원기관 [ABC]$/.test(b.provider)?agency:b.provider}))};
  })};
+}
+
+// Populate the initial workspace once. Entries created or edited by users take precedence.
+export function fillProjectExamples(workspace:Workspace):Workspace {
+ if(workspace.sampleRevision===1)return workspace;
+ const amounts=[220,360,300,420,800,300,650,0,500,540,390,450,180,260,210,120].map(n=>n*1000000);
+ const starts=['2026-01-01','2026-01-01','2026-01-01','2026-01-01','2026-01-01','2026-03-01','2026-01-01','2026-01-01','2026-04-01','2026-01-01','2026-01-01','2026-01-01','2026-03-01','2026-04-01','2026-01-01','2026-05-01'];
+ const ends=['2027-12-31','2027-12-31','2027-12-31','2028-12-31','2028-12-31','2026-12-31','2028-12-31','2026-12-31','2027-12-31','2028-12-31','2027-12-31','2027-12-31','2026-12-31','2027-12-31','2027-12-31','2026-12-31'];
+ const kpis:[string,number,number,string][]=[
+  ['의료정보 연계 기관',5,2,'기관'],['가상 진료 시나리오',4,2,'건'],['다기관 참여 기관',3,1,'기관'],
+  ['합병증 예측 모델 검증',2,1,'건'],['데이터 활용 연구과제',10,4,'건'],['교육 이수 인원',300,180,'명'],
+  ['의료로봇 실증 과제',5,2,'건'],['의료 AI 활용 사례',5,2,'건'],['표준화 데이터셋',3,1,'종'],
+  ['질환군 실증',6,2,'종'],['디지털 서비스 시나리오',4,2,'건'],['협진 AI 실증 기관',3,1,'기관'],
+  ['AX 컨설팅 기관',8,3,'기관'],['테스트베드 실증',10,4,'건'],['빅데이터 분석 지원',8,3,'건'],
+  ['자동 배정 시나리오',3,1,'건']
+ ];
+ const projects=workspace.projects.map(p=>{
+  const index=Number(p.id.match(/^project-(\d+)$/)?.[1])-1;
+  if(!Number.isInteger(index)||index<0||index>=amounts.length)return p;
+  const start=p.start||starts[index],end=p.end||ends[index];
+  const yearStart=p.yearStart||(start<'2026-01-01'?'2026-01-01':start);
+  const agency=p.agency||'지원기관 확인 필요';
+  const total=amounts[index];
+  const budgets=p.budgets.length?p.budgets:total===0?[{id:`sample-${p.id}-budget`,name:'별도 배정 예산 없음',year:'2026',kind:'현금',costType:'직접비',source:'기타',provider:agency,initial:0,spent:0,date:'2026-10-15'}]:[
+   {id:`sample-${p.id}-direct`,name:'연구활동비',year:'2026',kind:'현금',costType:'직접비',source:'정부지원금',provider:agency,initial:Math.round(total*.9),spent:Math.round(total*.9*(.28+(index%5)*.07)),date:'2026-10-15'},
+   {id:`sample-${p.id}-indirect`,name:'간접비',year:'2026',kind:'현금',costType:'간접비',source:'정부지원금',provider:agency,initial:Math.round(total*.1),spent:Math.round(total*.1*(.28+(index%5)*.07)),date:'2026-10-15'}
+  ];
+  const documentId=`sample-${p.id}-overview`;
+  const documents=p.documents.some(d=>d.url===`/sample-documents/${p.code}.html`)?p.documents:[...p.documents,{id:documentId,name:`${p.name} 사업 개요`,category:'사업계획',year:'2026',date:'2026-10-01',version:'1.0',url:`/sample-documents/${p.code}.html`,description:'사업 목표와 예시 일정·예산 요약'}];
+  const [title,target,actual,unit]=kpis[index];
+  const metrics=(p.metrics||[]).length?p.metrics:[
+   {id:`sample-${p.id}-kpi-1`,title,year:'2026',target,actual,unit,due:'2026-12-31',method:'과제별 실적 집계'},
+   {id:`sample-${p.id}-kpi-2`,title:'주요 마일스톤 완료',year:'2026',target:4,actual:1+(index%3),unit:'건',due:'2026-12-31',method:'분기별 추진계획 점검'}
+  ];
+  return {...p,start,end,yearStart,yearEnd:p.yearEnd||'2026-12-31',host:p.host||'분당차병원',participation:p.participation||(index===7?'참여':'주관'),manager:p.manager||`담당자${index+1}`,lead:p.lead||`책임자${index+1}`,budgets,documents,metrics};
+ });
+ const workgroups=workspace.workgroups?.map(meeting=>({...meeting,sections:meeting.sections.map(section=>{
+  const linked=section.projectIds.map(id=>projects.find(p=>p.id===id)).filter((p):p is Project=>Boolean(p));
+  if(!linked.length)return section;
+  const main=linked[0];
+  const additions=linked.map(p=>({id:`sample-${meeting.id}-${p.id}-overview`,name:`${p.name} 사업 개요.html`,url:`/sample-documents/${p.code}.html`}));
+  const attachments=[...section.attachments,...additions.filter(a=>!section.attachments.some(existing=>existing.url===a.url))];
+  const blocks=section.blocks.map(block=>{
+   if(block.items.some(item=>item.trim()))return block;
+   const heading=block.heading;
+   const items=/현황/.test(heading)?[`사업 목표: ${String(main.description||main.name).split('\n')[0]}`]:
+    /계획/.test(heading)?['당해연도 수행 일정과 담당 범위를 검토','다음 회의 전 과제별 추진 자료 취합']:
+    /의사결정|논의/.test(heading)?['협력기관 역할과 자료 제출 범위 확인']:
+    ['추가 이슈와 후속 조치는 회의 중 기록'];
+   return {...block,items};
+  });
+  return {...section,attachments,blocks};
+ })}));
+ return {...workspace,sampleRevision:1,projects,workgroups};
 }
 
 export function seedWorkgroups(workspace:Workspace):Workspace {
