@@ -11,7 +11,7 @@ export default function Indicators({projects,onEdit}:Props){
  const project=ordered.find(p=>p.id===projectId)||ordered[0];
  const metrics=((project?.metrics||[]) as Item[]).filter(m=>!m.deletedAt);
  return <div className="secondary-view kpi-page">
-  <div className="page-heading"><div><h1>성과 지표</h1><p>과제별 KPI의 목표와 실적을 관리합니다.</p></div></div>
+  <div className="workspace-page-title"><h1>성과 지표</h1></div>
   <section className="unified-section"><div className="unified-section-head"><strong>과제별 KPI</strong><span>기준 연도 2026</span></div>
    <div className="kpi-layout"><aside className="kpi-projects" aria-label="KPI 조회 과제">{ordered.map(p=><button key={p.id} className={p.id===project?.id?'active':''} onClick={()=>setProjectId(p.id)} title={p.name}>{p.focus&&<b aria-label="중점과제">★ </b>}<span>{p.alias||p.name}</span><small>{(p.metrics||[]).length}개</small></button>)}</aside>
     <div className="kpi-detail">{project?<><div className="kpi-detail-head"><div><small>{project.code} · {project.agency||'지원기관 미등록'}</small><h2>{project.name}</h2></div><button className="btn small" onClick={()=>onEdit(project)}><Plus size={14}/>KPI 추가</button></div>

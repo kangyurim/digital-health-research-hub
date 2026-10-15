@@ -53,3 +53,7 @@
 .kpi-progress{height:5px;background:#ddd;margin-top:6px;min-width:80px}
 .kpi-progress i{display:block;height:100%;background:#555}
 @media(max-width:800px){.kpi-layout{grid-template-columns:1fr}.kpi-projects{display:flex;max-height:none;overflow:auto;border-right:0;border-bottom:1px solid #d4d4d4}.kpi-projects button{flex:0 0 170px}}
+.workspace-app .workspace-page-title{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 16px;padding:0 0 11px;border-bottom:1px solid #c8c8c8}
+.workspace-app .workspace-page-title h1{font-size:22px;font-weight:700;line-height:1.35;letter-spacing:-.5px;color:#292929}
+.workspace-app .workspace-page-title>span{font-size:11px;color:#747474}
+.workspace-app .workspace-page-title>.btn{margin-left:auto}

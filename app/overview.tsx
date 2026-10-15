@@ -39,7 +39,7 @@ export default function Overview({projects,year,onOpen,onNavigate,onEditEvent}:P
  const onDay=(key:string)=>events.filter(e=>String(e.start).slice(0,10)<=key&&String(e.end||e.start).slice(0,10)>=key);
  const shift=(n:number)=>{const d=new Date(date);if(mode==='월'){d.setDate(1);d.setMonth(d.getMonth()+n)}else d.setDate(d.getDate()+n*(mode==='주'?7:1));setCursor(dayKey(d));setSelectedDay(dayKey(d))};
  return <div className="wire-overview">
-  <div className="wire-title"><h1>통합 현황</h1><span>{today().replaceAll('-','.')} 기준</span></div>
+  <div className="wire-title workspace-page-title"><h1>통합 현황</h1><span>{today().replaceAll('-','.')} 기준</span></div>
   <section className="wire-summary">
    <div className="wire-summary-menu" role="tablist" aria-label="현황 구분">
     <button role="tab" aria-selected={panel==='projects'} className={panel==='projects'?'selected':''} onClick={()=>setPanel('projects')}><span>등록 과제 <small>(중점/전체)</small></span><strong>{projects.filter(p=>p.focus).length} <i>/</i> {projects.length}<ChevronRight size={16}/></strong></button>
